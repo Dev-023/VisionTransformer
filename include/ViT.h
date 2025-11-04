@@ -9,6 +9,7 @@
 #define PATCH_SIZE 16               // 4
 #define IMAGE_SCALING 224
 #define NUM_HEAD 3
+#define PREPROCESS_SCALE 256
 
 #define DATASET_BATCH_SIZE 1
 #define NUM_BATCHES (DATASET_SIZE/DATASET_BATCH_SIZE)
