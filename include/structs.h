@@ -33,10 +33,12 @@ typedef struct {
 // #define T4(t, b, h, y, x) (t.data[ (((b) * (t.H) + (h)) * (t.Y) + (y)) * (t.X) + (x) ])
 
 float* alloc_aligned(size_t);
+Matrix alloc_matrix(int, int);
 Tensor1 alloc_tensor1(int);
 Tensor3 alloc_tensor3(int, int, int);
 Tensor4 alloc_tensor4(int, int, int, int);
 
+void free_matrix(Matrix);
 void free_tensor1(Tensor1);
 void free_tensor3(Tensor3);
 void free_tensor4(Tensor4);
