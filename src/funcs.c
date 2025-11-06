@@ -79,34 +79,36 @@ void softmax_scores(Tensor4 Scores) {
 }
 
 
+
 Tensor3 layernorm(Tensor3 in, Tensor1 gamma, Tensor1 beta) {
     int B = in.B, X = in.X, D = in.D;
     Tensor3 Out = alloc_tensor3(B, X, D);
+
     for (int b = 0; b < B; b++) {
         for (int x = 0; x < X; x++) {
             float mean = 0.0f;
-            for (int d = 0; d < D; d++)
-                mean += T3(in, b, x, d);
-            mean /= (float)D;
-
-            float var = 0.0f;
+            float M2 = 0.0f;
             for (int d = 0; d < D; d++) {
-                float diff = T3(in, b, x, d) - mean;
-                var += diff * diff;
+                float val = T3(in, b, x, d);
+                float delta = val - mean;
+                float count = (float)(d + 1);
+                mean += delta / count;
+                float delta2 = val - mean;
+                M2 += delta * delta2;
             }
-            var /= (float)D;
 
+            float var = M2 / (float)D;
             float inv_std = 1.0f / sqrtf(var + EPS);
 
             for (int d = 0; d < D; d++) {
-                float normed = (T3(in, b, x, d) - mean) * inv_std;
+                float val = T3(in, b, x, d);
+                float normed = (val - mean) * inv_std;
                 T3(Out, b, x, d) = normed * T1(gamma, d) + T1(beta, d);
             }
         }
     }
     return Out;
 }
-
 
 
 Tensor4 av_dot(Tensor4 Scores, Tensor4 V) {
