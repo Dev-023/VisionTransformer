@@ -1,6 +1,13 @@
-#include "../include/funcs.h"
+#include "funcs.h"
 #include <math.h>
 #include <stdio.h>
+
+#define BLOCK 64
+
+/*
+Please remember to free the input after calling the functions
+which implicitly allocate heap memory, may lead to crashes later 
+*/
 
 Tensor4 split_heads(Tensor3 in, int H) {
     int B = in.B, X = in.X, D = in.D;
@@ -78,7 +85,6 @@ void softmax_scores(Tensor4 Scores) {
             }
 }
 
-
 Tensor3 layernorm(Tensor3 in, Tensor1 gamma, Tensor1 beta) {
     int B = in.B, X = in.X, D = in.D;
     Tensor3 Out = alloc_tensor3(B, X, D);
@@ -107,8 +113,6 @@ Tensor3 layernorm(Tensor3 in, Tensor1 gamma, Tensor1 beta) {
     return Out;
 }
 
-
-
 Tensor4 av_dot(Tensor4 Scores, Tensor4 V) {
     int B=Scores.B, H=Scores.H, X=Scores.X, Y=V.Y;
     Tensor4 Out = alloc_tensor4(B,H,X,Y);
@@ -125,32 +129,30 @@ Tensor4 av_dot(Tensor4 Scores, Tensor4 V) {
     return Out;
 }
 
-// Compute row-wise stable softmax on Matrix input, store in output
-void softmax_matrix(Matrix input, Matrix output) {
-    if (input.rows != output.rows || input.cols != output.cols) {
-        fprintf(stderr, "Error: softmax_matrix() dimension mismatch\n");
-        return;
-    }
-
+// Compute row-wise stable softmax on Matrix input
+void softmax_inplace(Matrix input) {
     for (int r = 0; r < input.rows; r++) {
-        // Step 1: find max in this row
+        // Step 1: Find max value in row for numerical stability
         float max_val = -INFINITY;
+        
         for (int c = 0; c < input.cols; c++) {
-            if (M(input, r, c) > max_val)
-                max_val = M(input, r, c);
+            float val = M(input, r, c);
+            if (val > max_val)
+                max_val = val;
         }
 
-        // Step 2: compute exponentials of (x - max)
+        // Step 2: Compute exponentials and their sum
         float sum_exp = 0.0f;
         for (int c = 0; c < input.cols; c++) {
             float e = expf(M(input, r, c) - max_val);
-            M(output, r, c) = e;
+            M(input, r, c) = e;  // overwrite with exponent
             sum_exp += e;
         }
 
-        // Step 3: normalize by sum of exps
+        // Step 3: Normalize in-place
+        float inv_sum = 1.0f / sum_exp;
         for (int c = 0; c < input.cols; c++) {
-            M(output, r, c) /= sum_exp;
+            M(input, r, c) *= inv_sum;
         }
     }
 }
@@ -251,26 +253,42 @@ Matrix getOffsetMatrix(Tensor3 t, int b, int colOffset, int cols) {
 Tensor3 MHA(Tensor3 input, Matrix qkvWeight, Matrix qkvBias) {
     qkvWeight = transpose(qkvWeight);
     int B = input.B;
-    Tensor3 output = alloc_tensor3(B, input.X, qkvWeight.cols);
+
+    // Mem alloc + QKV compute
+    Tensor3 intermediate = alloc_tensor3(B, input.X, qkvWeight.cols);
+    Tensor3 output = alloc_tensor3(B, input.X, 192);  // 192 is size of each result (same as Q, K, V depth)
 
     for (int b = 0; b < B; b++) {
         Matrix temp = multMatrix(getMatrix(input, b), qkvWeight);
         addMatrix_inplace(temp, qkvBias);
 
-        Matrix outSlot = getMatrix(output, b);
+        Matrix outSlot = getMatrix(intermediate, b);
         memcpy(outSlot.data, temp.data, temp.rows * temp.cols * sizeof(float));
         free_matrix(temp);
     }
 
     for (int b = 0; b < B; b++) {
-        Matrix Q = getOffsetMatrix(output, b, 0, 192);
-        Matrix K = getOffsetMatrix(output, b, 192, 192);
-        Matrix V = getOffsetMatrix(output, b, 384, 192);
+        // Splitting the heads with pointers
+        Matrix Q = getOffsetMatrix(intermediate, b, 0, 192);
+        Matrix K = getOffsetMatrix(intermediate, b, 192, 192);
+        Matrix V = getOffsetMatrix(intermediate, b, 384, 192);
 
         // Computing Attention
         Matrix Kt = transpose(K);
         Matrix QKt = multMatrix(Q, Kt);
+        softmax_inplace(QKt);
+        Matrix result = multMatrix(QKt, V);
 
+        // Dumping Attention in output tensor
+        Matrix outSlot = getMatrix(output, b);
+        memcpy(outSlot.data, result.data, result.rows * result.cols * sizeof(float));
+
+        // Freeing temp alloc memory
         free_matrix(Kt);
+        free_matrix(QKt);
+        free_matrix(result);
     }
+
+    free_tensor3(intermediate);
+    return output;
 }
