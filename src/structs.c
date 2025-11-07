@@ -12,6 +12,14 @@ inline float* alloc_aligned(size_t n) {
     return (float*)ptr;
 }
 
+Matrix alloc_matrix(int R, int C) {
+    Matrix m;
+    m.rows = R;
+    m.cols = C;
+    m.data = alloc_aligned((size_t) R*C);
+    return m;
+}
+
 Tensor1 alloc_tensor1(int D) {
     Tensor1 t;
     t.D = D;
@@ -38,6 +46,7 @@ Tensor4 alloc_tensor4(int B, int H, int X, int Y) {
     return t;
 }
 
+<<<<<<< HEAD
 Matrix alloc_matrix(int rows, int cols) {
     Matrix m;
     m.rows = rows;
@@ -50,3 +59,9 @@ void free_tensor1(Tensor1 t) { free(t.data); }
 void free_tensor3(Tensor3 t) {free(t.data);}
 void free_tensor4(Tensor4 t) {free(t.data);}
 void free_matrix(Matrix m) { free(m.data); }
+=======
+void free_matrix(Matrix m) {free(m.data);}
+void free_tensor1(Tensor1 t) { free(t.data); }
+void free_tensor3(Tensor3 t) {free(t.data);}
+void free_tensor4(Tensor4 t) {free(t.data);}
+>>>>>>> main

@@ -4,7 +4,12 @@
 #include "structs.h"
 
 Tensor4 LoadCIFAR10Dataset(const char *, char *, int);
+Tensor4 LoadImageFromPPM(const char *);
 Tensor4 ResizeTo224(Tensor4);
+Tensor4 Resize256(Tensor4);
 Tensor3 MakePatches(Tensor4);
+Tensor4 Crop224(Tensor4);
+void Normalize(Tensor4);
+Tensor3 Conv2D(Tensor4, Tensor4, Tensor1);
 
 #endif

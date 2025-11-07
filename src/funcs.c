@@ -1,6 +1,87 @@
 #include "../include/funcs.h"
 #include <math.h>
+#include <string.h>
 #include <stdio.h>
+
+void print_tensor4(Tensor4 t) {
+    int lim = 3;
+    int B = t.B;
+    int C = t.H;
+    int H = t.X;
+    int W = t.Y;
+    printf("[\n");
+    for (int b = 0; b < B; b++) {
+        printf("    [\n");
+        for (int c = 0; c < C; c++) {
+            printf("        [\n");
+            for (int y = 0; y < H; y++) {
+                if (y>=lim && y<H-lim) {
+                    printf("            ...,\n");
+                    y=H-lim;
+                }
+                printf("            [");
+                for (int x = 0; x < W; x++) {
+                    if (x>=lim && x<W-lim) {
+                        printf("..., ");
+                        x=W-lim;
+                    }
+                    printf("%7.4f", T4(t, b, c, y, x));
+                    if (x < W - 1) printf(", ");
+                }
+                printf("]");
+                if (y < H - 1) printf(",\n");
+                else printf("\n");
+            }
+            printf("        ]");
+            if (c < C - 1) printf(",\n\n");
+            else printf("\n");
+        }
+        printf("    ]");
+        if (b < B - 1) printf(",\n\n");
+        else printf("\n");
+    }
+    printf("]\n");
+}
+
+void print_tensor3(Tensor3 t) {
+    int lim = 3;
+    int B = t.B;
+    int X = t.X;
+    int D = t.D;
+
+    printf("[\n");
+    for (int b = 0; b < B; b++) {
+        printf("  [\n");
+        for (int x = 0; x < X; x++) {
+
+            if (x == lim && X > 2 * lim) {
+                printf("    ...,\n");
+                x = X - lim;
+            }
+
+            printf("    [");
+            for (int d = 0; d < D; d++) {
+
+                if (d == lim && D > 2 * lim) {
+                    printf("..., ");
+                    d = D - lim;
+                }
+
+                printf("%10.4f", T3(t, b, x, d));
+                if (d < D - 1) printf(", ");
+            }
+            printf("]");
+
+            if (x < X - 1) printf(",\n");
+            else printf("\n");
+        }
+        printf("  ]");
+        if (b < B - 1) printf(",\n\n");
+        else printf("\n");
+    }
+    printf("]\n");
+}
+
 
 Tensor4 split_heads(Tensor3 in, int H) {
     int B = in.B, X = in.X, D = in.D;
@@ -78,8 +159,6 @@ void softmax_scores(Tensor4 Scores) {
             }
 }
 
-
-
 Tensor3 layernorm(Tensor3 in, Tensor1 gamma, Tensor1 beta) {
     int B = in.B, X = in.X, D = in.D;
     Tensor3 Out = alloc_tensor3(B, X, D);
@@ -110,7 +189,6 @@ Tensor3 layernorm(Tensor3 in, Tensor1 gamma, Tensor1 beta) {
     return Out;
 }
 
-
 Tensor4 av_dot(Tensor4 Scores, Tensor4 V) {
     int B=Scores.B, H=Scores.H, X=Scores.X, Y=V.Y;
     Tensor4 Out = alloc_tensor4(B,H,X,Y);
@@ -127,32 +205,30 @@ Tensor4 av_dot(Tensor4 Scores, Tensor4 V) {
     return Out;
 }
 
-// Compute row-wise stable softmax on Matrix input, store in output
-void softmax_matrix(Matrix input, Matrix output) {
-    if (input.rows != output.rows || input.cols != output.cols) {
-        fprintf(stderr, "Error: softmax_matrix() dimension mismatch\n");
-        return;
-    }
-
+// Compute row-wise stable softmax on Matrix input
+void softmax_inplace(Matrix input) {
     for (int r = 0; r < input.rows; r++) {
-        // Step 1: find max in this row
+        // Step 1: Find max value in row for numerical stability
         float max_val = -INFINITY;
+        
         for (int c = 0; c < input.cols; c++) {
-            if (M(input, r, c) > max_val)
-                max_val = M(input, r, c);
+            float val = M(input, r, c);
+            if (val > max_val)
+                max_val = val;
         }
 
-        // Step 2: compute exponentials of (x - max)
+        // Step 2: Compute exponentials and their sum
         float sum_exp = 0.0f;
         for (int c = 0; c < input.cols; c++) {
             float e = expf(M(input, r, c) - max_val);
-            M(output, r, c) = e;
+            M(input, r, c) = e;  // overwrite with exponent
             sum_exp += e;
         }
 
-        // Step 3: normalize by sum of exps
+        // Step 3: Normalize in-place
+        float inv_sum = 1.0f / sum_exp;
         for (int c = 0; c < input.cols; c++) {
-            M(output, r, c) /= sum_exp;
+            M(input, r, c) *= inv_sum;
         }
     }
 }
@@ -227,4 +303,139 @@ Tensor3 mlp_forward(Tensor3 in, MLP_Weights* weights) {
     free_tensor3(fc1_out);
 
     return fc2_out;
+}
+Matrix transpose(Matrix input) {
+    Matrix output = alloc_matrix(input.cols, input.rows);
+
+    for (int i = 0; i < input.rows; i++) {
+        for (int j = 0; j < input.cols; j++) {
+            M(output, j, i) = M(input, i, j);
+        }
+    }
+
+    free_matrix(input);
+    return output;
+}
+
+/*
+Implementing Matrix multiplication with blocked computing
+The input is segmented into blocks of predefined size (size defined by macro at the beginning
+Then the computation is processed on the blocks and accumulated in order to get the correct
+corresponding matrix product
+*/
+Matrix multMatrix(Matrix A, Matrix B) {
+    if (A.cols != B.rows) {
+        printf("Error: matmul_blocked() dimension mismatch: %d×%d * %d×%d\n",
+                A.rows, A.cols, B.rows, B.cols);
+        exit(1);
+    }
+
+    Matrix C = alloc_matrix(A.rows, B.cols);
+
+    int n = A.rows;
+    int m = B.cols;
+    int p = A.cols;
+
+    // zero-ing the target loc for accumulation
+    for (int i = 0; i < n * m; i++) C.data[i] = 0.0f;
+
+    for (int ii = 0; ii < n; ii += BLOCK) {
+        for (int kk = 0; kk < p; kk += BLOCK) {
+            for (int jj = 0; jj < m; jj += BLOCK) {
+
+                int i_max = (ii + BLOCK < n) ? (ii + BLOCK) : n;
+                int k_max = (kk + BLOCK < p) ? (kk + BLOCK) : p;
+                int j_max = (jj + BLOCK < m) ? (jj + BLOCK) : m;
+
+                for (int i = ii; i < i_max; i++) {
+                    for (int k = kk; k < k_max; k++) {
+                        float a_val = M(A, i, k);
+                        float *c_row = &M(C, i, jj);
+                        float *b_row = &M(B, k, jj);
+                        for (int j = jj; j < j_max; j++) {
+                            c_row[j - jj] += a_val * b_row[j - jj];
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return C;
+}
+
+/*
+column-wise addition of matrices specifically programmed of bias addition in MHA
+USE WITH CAUTION cuz implementation is oddly specific
+*/
+Matrix addMatrix_inplace(Matrix A, Matrix B) {
+    for (int j = 0; j < A.cols; j++) {
+        for (int i = 0; i < A.rows; i++) {
+            M(A, i, j) = M(A, i, j) + M(B, j, 0);
+        }
+    }
+
+    return A;
+}
+
+// Getting pointer to specific matrix of the input tensor
+Matrix getMatrix(Tensor3 t, int b) {
+    Matrix m;
+    m.rows = t.X;
+    m.cols = t.D;
+    m.data = &t.data[b * t.X * t.D];  // direct pointer into Tensor3 memory
+    return m;
+}
+
+// Getting pointer to specific offset matrix segment of concatenated tensor (Implemented for MHA)
+Matrix getOffsetMatrix(Tensor3 t, int b, int colOffset, int cols) {
+    Matrix m;
+    m.rows = t.X;
+    m.cols = cols;
+    m.data = &t.data[b * t.X * t.D + colOffset];
+    return m;
+}
+
+// Computing qkv concatenated heads
+Tensor3 MHA(Tensor3 input, Matrix qkvWeight, Matrix qkvBias) {
+    qkvWeight = transpose(qkvWeight);
+    int B = input.B;
+
+    // Mem alloc + QKV compute
+    Tensor3 intermediate = alloc_tensor3(B, input.X, qkvWeight.cols);
+    Tensor3 output = alloc_tensor3(B, input.X, 192);  // 192 is size of each result (same as Q, K, V depth)
+
+    for (int b = 0; b < B; b++) {
+        Matrix temp = multMatrix(getMatrix(input, b), qkvWeight);
+        addMatrix_inplace(temp, qkvBias);
+
+        Matrix outSlot = getMatrix(intermediate, b);
+        memcpy(outSlot.data, temp.data, temp.rows * temp.cols * sizeof(float));
+        free_matrix(temp);
+    }
+
+    for (int b = 0; b < B; b++) {
+        // Splitting the heads with pointers
+        Matrix Q = getOffsetMatrix(intermediate, b, 0, 192);
+        Matrix K = getOffsetMatrix(intermediate, b, 192, 192);
+        Matrix V = getOffsetMatrix(intermediate, b, 384, 192);
+
+        // Computing Attention
+        Matrix Kt = transpose(K);
+        Matrix QKt = multMatrix(Q, Kt);
+        softmax_inplace(QKt);
+        Matrix result = multMatrix(QKt, V);
+
+        // Dumping Attention in output tensor
+        Matrix outSlot = getMatrix(output, b);
+        memcpy(outSlot.data, result.data, result.rows * result.cols * sizeof(float));
+
+        // Freeing temp alloc memory
+        free_matrix(Kt);
+        free_matrix(QKt);
+        free_matrix(result);
+    }
+
+    free_tensor3(intermediate);
+    return output;
 }

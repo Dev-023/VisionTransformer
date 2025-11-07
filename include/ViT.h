@@ -3,12 +3,16 @@
 
 #include "structs.h"
 #include "image.h"
+#include "funcs.h"
+#include "parameters.h"
 
 #define DATASET_SIZE 50000          // 50000
 #define IMAGE_SIZE 32               // 32
 #define PATCH_SIZE 16               // 4
 #define IMAGE_SCALING 224
 #define NUM_HEAD 3
+#define PREPROCESS_SCALE 256
+#define ENCODER_BLOCKS 1            // 12
 
 #define DATASET_BATCH_SIZE 1
 #define NUM_BATCHES (DATASET_SIZE/DATASET_BATCH_SIZE)
