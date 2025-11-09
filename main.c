@@ -9,7 +9,7 @@ int main() {
     char** Labels = load_labels("dataset/ImageNetSelected/Labels.txt", 1000);
     // (B, C, H, W);
     // Tensor4 Images = LoadCIFAR10Dataset("dataset/cifar-10-batches-bin/train_all.bin", Labels, 0);
-    Tensor4 Images = LoadImageFromPPM("dataset/ImageNetSelected/n01687978_10071.ppm");
+    Tensor4 Images = LoadImageFromPPM("dataset/ImageNetSelected/n01735189_11267.ppm");
     printf("Input Image\n");
     print_tensor4(Images);
 
