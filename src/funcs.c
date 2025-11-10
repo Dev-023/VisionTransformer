@@ -344,6 +344,19 @@ Matrix multMatrix(Matrix A, Matrix B) {
 column-wise addition of matrices specifically programmed of bias addition in MHA
 USE WITH CAUTION cuz implementation is oddly specific
 */
+Tensor4 addTensor4(Tensor4 A, Tensor4 B) {
+    for (int b = 0; b < A.B; b++) {
+        for (int h = 0; h < A.H; h++) {
+            for (int x = 0; x < A.X; x++) {
+                for (int y = 0; y < A.X; y++) {
+                    T4(A, b, h, x, y)+=T4(B, b, h, x, y);
+                }
+            }
+        }
+    }
+    return A;
+}
+
 Tensor3 addTensor3(Tensor3 A, Tensor3 B) {
     for (int b = 0; b < A.B; b++) {
         for (int x = 0; x < A.X; x++) {
@@ -353,34 +366,6 @@ Tensor3 addTensor3(Tensor3 A, Tensor3 B) {
         }
     }
     return A;
-}
-
-Matrix addBias(Matrix A, Tensor1 B) {
-    for (int j = 0; j < A.cols; j++) {
-        for (int i = 0; i < A.rows; i++) {
-            M(A, i, j) += T1(B, j);
-        }
-    }
-
-    return A;
-}
-
-// Getting pointer to specific matrix of the input tensor
-Matrix getMatrix(Tensor3 t, int b) {
-    Matrix m;
-    m.rows = t.X;
-    m.cols = t.D;
-    m.data = &t.data[b * t.X * t.D];  // direct pointer into Tensor3 memory
-    return m;
-}
-
-// Getting pointer to specific offset matrix segment of concatenated tensor (Implemented for MHA)
-Matrix getOffsetMatrix(Tensor3 t, int b, int colOffset, int cols) {
-    Matrix m;
-    m.rows = t.X;
-    m.cols = cols;
-    m.data = &t.data[b * t.X * t.D + colOffset];
-    return m;
 }
 
 Tensor3 MHA(Tensor3 input, Matrix qkvWeight, Tensor1 qkvBias, Matrix ProjW, Tensor1 ProjB) {
@@ -461,47 +446,3 @@ char** load_labels(const char *path, int num_labels) {
     fclose(fp);
     return labels;
 }
-
-// // Computing qkv concatenated heads
-// Tensor3 MHA(Tensor3 input, Matrix qkvWeight, Tensor1 qkvBias) {
-//     qkvWeight = transpose(qkvWeight);
-//     int B = input.B;
-
-//     // Mem alloc + QKV compute
-//     Tensor3 intermediate = alloc_tensor3(B, input.X, qkvWeight.cols);
-//     Tensor3 output = alloc_tensor3(B, input.X, 192);  // 192 is size of each result (same as Q, K, V depth)
-
-//     for (int b = 0; b < B; b++) {
-//         Matrix temp = multMatrix(getMatrix(input, b), qkvWeight);
-//         addBias(temp, qkvBias);
-
-//         Matrix outSlot = getMatrix(intermediate, b);
-//         memcpy(outSlot.data, temp.data, temp.rows * temp.cols * sizeof(float));
-//         free_matrix(temp);
-//     }
-
-//     for (int b = 0; b < B; b++) {
-//         // Splitting the heads with pointers
-//         Matrix Q = getOffsetMatrix(intermediate, b, 0, 192);
-//         Matrix K = getOffsetMatrix(intermediate, b, 192, 192);
-//         Matrix V = getOffsetMatrix(intermediate, b, 384, 192);
-
-//         // Computing Attention
-//         Matrix Kt = transpose(K);
-//         Matrix QKt = multMatrix(Q, Kt);
-//         softmax_inplace(QKt);
-//         Matrix result = multMatrix(QKt, V);
-
-//         // Dumping Attention in output tensor
-//         Matrix outSlot = getMatrix(output, b);
-//         memcpy(outSlot.data, result.data, result.rows * result.cols * sizeof(float));
-
-//         // Freeing temp alloc memory
-//         free_matrix(Kt);
-//         free_matrix(QKt);
-//         free_matrix(result);
-//     }
-
-//     free_tensor3(intermediate);
-//     return output;
-// }

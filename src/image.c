@@ -265,12 +265,10 @@ Tensor3 Conv2D(Tensor4 Images, Tensor4 Kernel, Tensor1 bias) {
         for (int y0 = 0; y0 < IMAGE_SCALING; y0 += Kernel.X) {      // move vertically
             for (int x0 = 0; x0 < IMAGE_SCALING; x0 += Kernel.Y) {  // move horizontally
                 float sum = 0.0f;
-                int count=0;
                 for (int cc = 0; cc < 3; cc++) {
                     for (int ky = 0; ky < Kernel.Y; ky++) {
                         for (int kx = 0; kx < Kernel.X; kx++) {
                             sum += T4(Images, 0, cc, y0 + ky, x0 + kx) * T4(Kernel, c, cc, ky, kx);
-                            count++;
                             // printf("%d: %6.4f\n", count, T4(Images, 0, cc, y0 + ky, x0 + kx) * T4(Kernel, c, cc, ky, kx));
                         }
                     }

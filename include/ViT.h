@@ -6,7 +6,7 @@
 #include "funcs.h"
 #include "parameters.h"
 
-#define DATASET_SIZE 50000          // 50000
+#define PRINT 1
 #define IMAGE_SIZE 32               // 32
 #define PATCH_SIZE 16               // 4
 #define IMAGE_SCALING 224
